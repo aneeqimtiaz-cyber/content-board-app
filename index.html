@@ -95,6 +95,7 @@
     border: 1px solid var(--line); white-space: nowrap;
   }
   .tag.me { background: #eef3ff; border-color: #d6e0fb; }
+  .tag.score { background: #eef7f0; border-color: #cfe6d5; color: #2f6b3e; }
   .tag.stale { background: #fdecea; border-color: #f5c6c1; color: #9b2c22; }
   .card .title { font-weight: 600; font-size: 13.5px; margin: 0 0 4px; }
   .card .angle { color: #4b5563; font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
@@ -171,7 +172,7 @@
   // ---------- Columns ----------
   const COLUMNS = [
     { id: "research", name: "Research", color: "var(--research)", hint: "Ideas from Sherlock and you" },
-    { id: "writing",  name: "Writing",  color: "var(--writing)",  hint: "Watson is drafting" },
+    { id: "writing",  name: "Writing",  color: "var(--writing)",  hint: "Drag an idea here to make Watson write it first" },
     { id: "review",   name: "In review", color: "var(--review)",  hint: "Your turn: pick, add detail, post" },
     { id: "posted",   name: "Posted",   color: "var(--posted)",   hint: "Live on LinkedIn" },
     { id: "parked",   name: "Parked",   color: "var(--parked)",   hint: "Not now, with a reason" },
@@ -352,6 +353,7 @@
     const tags = el("div", { class: "row" });
     tags.append(el("span", { class: "tag" }, c.kind === "draft" ? `Draft · ${c.options.length} options` : "Idea"));
     if (c.format) tags.append(el("span", { class: "tag" }, FORMAT_LABEL[c.format] || c.format));
+    if (typeof c.score === "number") tags.append(el("span", { class: "tag score" }, `Score ${c.score}/10`));
     if (c.added_by === "me") tags.append(el("span", { class: "tag me" }, "Added by me"));
     if (isStale(c)) tags.append(el("span", { class: "tag stale" }, "Expired"));
     const node = el("article", { class: "card", draggable: "true", "data-id": c.id, style: `--c:${col.color}`, tabindex: "0" },
@@ -410,6 +412,7 @@
 
     const parts = [el("h3", {}, c.title || "(untitled)"), meta];
 
+    if (typeof c.score === "number") parts.push(section("Why it's worth writing", el("p", {}, `${c.score}/10${c.score_reason ? " · " + c.score_reason : ""}`)));
     if (c.angle) parts.push(section("Angle", el("p", {}, c.angle)));
     if (c.why_now) parts.push(section("Why now", el("p", {}, c.why_now)));
     if (c.sources.length) {
