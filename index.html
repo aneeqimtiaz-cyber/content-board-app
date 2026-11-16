@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Content Board</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 rx=%224%22 fill=%22%231d2433%22/%3E%3Crect x=%223%22 y=%224%22 width=%222.5%22 height=%228%22 fill=%22%23f5b82e%22/%3E%3Crect x=%226.75%22 y=%224%22 width=%222.5%22 height=%226%22 fill=%22%23ef7d32%22/%3E%3Crect x=%2210.5%22 y=%224%22 width=%222.5%22 height=%224%22 fill=%22%235aa06b%22/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f7f3ec;
+    --panel: #fffdf9;
+    --ink: #1d2433;
+    --muted: #6b7280;
+    --line: #e6dfd3;
+    --research: #f5b82e;
+    --writing: #ef7d32;
+    --review: #5aa06b;
+    --posted: #5b8def;
+    --parked: #9aa1ad;
+    --accent: #1d2433;
+    --add: #fff1c2;
+    --radius: 12px;
+    --shadow: 0 1px 2px rgba(29,36,51,.06), 0 2px 8px rgba(29,36,51,.05);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    background-image: radial-gradient(rgba(29,36,51,.07) 1px, transparent 1px);
+    background-size: 18px 18px;
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.45;
+    display: flex; flex-direction: column;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 14px 20px; border-bottom: 1px solid var(--line);
+    background: rgba(255,253,249,.92); backdrop-filter: blur(6px);
+    position: sticky; top: 0; z-index: 5;
+  }
+  header h1 { font-size: 18px; margin: 0; letter-spacing: -.01em; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  header .spacer { flex: 1; }
+  .status { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--parked); }
+  .dot.ok { background: var(--review); }
+  .dot.busy { background: var(--research); }
+  .dot.err { background: #d9534f; }
+  button {
+    font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--ink); padding: 7px 12px;
+  }
+  button:hover { border-color: #cfc6b8; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { opacity: .9; }
+  button.danger { color: #b42318; }
+  button.small { padding: 4px 9px; font-size: 12px; }
+  .banner {
+    margin: 12px 20px 0; padding: 10px 14px; border-radius: 10px;
+    background: #fff7e0; border: 1px solid #f1dfa6; font-size: 13px;
+  }
+  .banner[hidden] { display: none; }
+  main {
+    flex: 1; display: grid; grid-template-columns: repeat(5, minmax(240px, 1fr));
+    gap: 14px; padding: 16px 20px 24px; overflow-x: auto; align-items: start;
+  }
+  .col {
+    background: rgba(255,253,249,.75); border: 1px solid var(--line); border-radius: var(--radius);
+    display: flex; flex-direction: column; min-height: 240px; max-height: calc(100vh - 120px);
+  }
+  .col-head {
+    display: flex; align-items: center; gap: 8px; padding: 12px 14px 10px;
+    border-bottom: 1px solid var(--line); border-top: 4px solid var(--c); border-radius: var(--radius) var(--radius) 0 0;
+  }
+  .col-head h2 { font-size: 14px; margin: 0; white-space: nowrap; }
+  .col-head .count {
+    font-size: 12px; color: var(--muted); background: var(--bg); border-radius: 999px; padding: 0 8px;
+  }
+  .col-head .hint { font-size: 11px; color: var(--muted); margin-left: auto; text-align: right; }
+  .col-body { padding: 10px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; flex: 1; }
+  .col.drop .col-body { background: rgba(91,141,239,.07); outline: 2px dashed rgba(91,141,239,.45); outline-offset: -6px; border-radius: 0 0 var(--radius) var(--radius); }
+  .empty { color: var(--muted); font-size: 12px; text-align: center; padding: 18px 8px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+    box-shadow: var(--shadow); cursor: grab; border-left: 3px solid var(--c);
+  }
+  .card:hover { border-color: #d6cdbf; }
+  .card.dragging { opacity: .45; }
+  .card .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+  .tag {
+    font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--bg); color: #4b5563;
+    border: 1px solid var(--line); white-space: nowrap;
+  }
+  .tag.me { background: #eef3ff; border-color: #d6e0fb; }
+  .tag.stale { background: #fdecea; border-color: #f5c6c1; color: #9b2c22; }
+  .card .title { font-weight: 600; font-size: 13.5px; margin: 0 0 4px; }
+  .card .angle { color: #4b5563; font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .card .foot { color: var(--muted); font-size: 11px; margin-top: 8px; display: flex; justify-content: space-between; gap: 8px; }
+
+  /* Modal */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(29,36,51,.35); display: none;
+    align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; z-index: 20;
+  }
+  .overlay.open { display: flex; }
+  .modal {
+    background: var(--panel); border-radius: 14px; width: min(760px, 100%); padding: 22px 24px;
+    box-shadow: 0 20px 60px rgba(29,36,51,.25); border: 1px solid var(--line);
+  }
+  .modal h3 { margin: 0 0 6px; font-size: 18px; }
+  .modal .meta { color: var(--muted); font-size: 12px; margin-bottom: 14px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .modal section { margin-top: 16px; }
+  .modal section > label, .modal .lbl { display: block; font-size: 12px; font-weight: 600; color: #4b5563; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .03em; }
+  .modal p { margin: 0 0 8px; }
+  .modal a { color: #2f5fd0; word-break: break-word; }
+  input[type=text], input[type=url], input[type=password], textarea, select {
+    width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink);
+  }
+  textarea { min-height: 80px; resize: vertical; }
+  .option {
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; background: #fff;
+  }
+  .option.picked { border-color: var(--review); box-shadow: 0 0 0 2px rgba(90,160,107,.18); }
+  .option .ohead { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .option .ohead strong { font-size: 13px; }
+  .option .ohead .spacer { flex: 1; }
+  .option .text { white-space: pre-wrap; font-size: 13.5px; }
+  .add { background: var(--add); border-radius: 4px; padding: 0 3px; font-weight: 600; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; align-items: center; }
+  .actions .spacer { flex: 1; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .note { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .toast {
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #fff;
+    padding: 9px 14px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 30;
+  }
+  .toast.show { opacity: 1; }
+  @media (max-width: 760px) {
+    main { grid-template-columns: repeat(5, 82vw); scroll-snap-type: x mandatory; }
+    .col { scroll-snap-align: start; }
+    .grid2 { grid-template-columns: 1fr; }
+    header { padding: 12px 14px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Content Board</h1>
+    <div class="sub">LinkedIn posts · research Mon · drafts Tue</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="status" id="status"><span class="dot" id="statusDot"></span><span id="statusText">Loading…</span></div>
+  <button id="btnAdd" class="primary">+ Add idea</button>
+  <button id="btnRefresh">Refresh</button>
+  <button id="btnSettings">Settings</button>
+</header>
+<div class="banner" id="banner" hidden></div>
+<main id="board"></main>
+
+<div class="overlay" id="overlay"><div class="modal" id="modal" role="dialog" aria-modal="true"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------- Columns ----------
+  const COLUMNS = [
+    { id: "research", name: "Research", color: "var(--research)", hint: "Ideas from the researcher and you" },
+    { id: "writing",  name: "Writing",  color: "var(--writing)",  hint: "Being drafted" },
+    { id: "review",   name: "In review", color: "var(--review)",  hint: "Your turn: pick, add detail, post" },
+    { id: "posted",   name: "Posted",   color: "var(--posted)",   hint: "Live on LinkedIn" },
+    { id: "parked",   name: "Parked",   color: "var(--parked)",   hint: "Not now, with a reason" },
+  ];
+  const COL = Object.fromEntries(COLUMNS.map(c => [c.id, c]));
+  const FORMAT_LABEL = { "how-to": "How-to", "template": "Template", "pov": "POV", "hot-take": "Hot take", "story": "Story", "teardown": "Teardown", "news": "News", "experiment": "Experiment" };
+
+  // ---------- Settings & storage ----------
+  const SETTINGS_KEY = "cb_settings_v1";
+  const LOCAL_BOARD_KEY = "cb_local_board_v1";
+  function safeGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  function safeSet(k, v) { try { localStorage.setItem(k, v); return true; } catch { return false; } }
+  function loadSettings() {
+    try { return JSON.parse(safeGet(SETTINGS_KEY) || "{}"); } catch { return {}; }
+  }
+  let settings = loadSettings();
+  // Guess owner/repo from a github.io address when not set.
+  (function guessRepo() {
+    const m = location.hostname.match(/^([^.]+)\.github\.io$/i);
+    if (m && !settings.owner) settings.owner = m[1];
+    // The drafts live in a separate private repo; this page only displays them.
+    if (!settings.repo) settings.repo = "linkedin-content-board";
+    if (!settings.branch) settings.branch = "main";
+    if (!settings.path) settings.path = "board.json";
+  })();
+
+  function mode() {
+    if (settings.owner && settings.repo && settings.token) return "github";
+    if (location.protocol.startsWith("http") && location.hostname.endsWith("github.io")) return "readonly";
+    return "local";
+  }
+
+  // UTF-8 safe base64
+  function b64encode(str) {
+    const bytes = new TextEncoder().encode(str);
+    let bin = ""; const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    return btoa(bin);
+  }
+  function b64decode(b64) {
+    const bin = atob(b64.replace(/\s/g, ""));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+
+  const api = {
+    url() {
+      const { owner, repo, path, branch } = settings;
+      return `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path.split("/").map(encodeURIComponent).join("/")}`;
+    },
+    headers() {
+      return { "Accept": "application/vnd.github+json", "Authorization": `Bearer ${settings.token}`, "X-GitHub-Api-Version": "2022-11-28" };
+    },
+    async read() {
+      const res = await fetch(`${this.url()}?ref=${encodeURIComponent(settings.branch)}&t=${Date.now()}`, { headers: this.headers(), cache: "no-store" });
+      if (res.status === 404) return { board: emptyBoard(), sha: null };
+      if (!res.ok) throw new Error(`GitHub read failed (${res.status}). Check the repo name and token in Settings.`);
+      const j = await res.json();
+      return { board: normalize(JSON.parse(b64decode(j.content))), sha: j.sha };
+    },
+    async write(board, sha, message) {
+      const body = { message, content: b64encode(JSON.stringify(board, null, 2) + "\n"), branch: settings.branch };
+      if (sha) body.sha = sha;
+      const res = await fetch(this.url(), { method: "PUT", headers: { ...this.headers(), "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      if (res.status === 409 || res.status === 422) { const e = new Error("conflict"); e.conflict = true; throw e; }
+      if (!res.ok) throw new Error(`GitHub save failed (${res.status}). The token may need "Contents: Read and write" access.`);
+      const j = await res.json();
+      return j.content.sha;
+    },
+  };
+
+  function emptyBoard() { return { version: 1, updated: new Date().toISOString(), cards: [] }; }
+  function normalize(b) {
+    b = b && typeof b === "object" ? b : emptyBoard();
+    if (!Array.isArray(b.cards)) b.cards = [];
+    b.cards.forEach(c => {
+      if (!COL[c.column]) c.column = "research";
+      c.sources = Array.isArray(c.sources) ? c.sources : [];
+      c.options = Array.isArray(c.options) ? c.options : [];
+      c.history = Array.isArray(c.history) ? c.history : [];
+    });
+    return b;
+  }
+
+  // ---------- State ----------
+  let board = emptyBoard();
+  let sha = null;
+  let saving = false;
+
+  async function load() {
+    setStatus("busy", "Loading…");
+    const m = mode();
+    try {
+      if (m === "github") {
+        const r = await api.read(); board = r.board; sha = r.sha;
+        setStatus("ok", `Synced with ${settings.owner}/${settings.repo}`);
+      } else if (m === "readonly") {
+        const res = await fetch(`board.json?t=${Date.now()}`, { cache: "no-store" });
+        board = normalize(res.ok ? await res.json() : emptyBoard());
+        setStatus("", "Read only");
+      } else {
+        const saved = safeGet(LOCAL_BOARD_KEY);
+        if (saved) board = normalize(JSON.parse(saved));
+        else {
+          try { const res = await fetch("board.json", { cache: "no-store" }); board = normalize(res.ok ? await res.json() : sampleBoard()); }
+          catch { board = sampleBoard(); }
+          if (!board.cards.length) board = sampleBoard();
+        }
+        setStatus("", "Local demo");
+      }
+    } catch (e) {
+      setStatus("err", "Could not load");
+      toast(e.message);
+    }
+    renderBanner();
+    render();
+  }
+
+  // Apply a change. In GitHub mode, always re-read first so agent updates are never overwritten.
+  async function mutate(label, fn) {
+    if (mode() === "readonly") { toast("Read only. Add your GitHub token in Settings to make changes."); return; }
+    if (mode() === "local") {
+      fn(board); board.updated = new Date().toISOString();
+      safeSet(LOCAL_BOARD_KEY, JSON.stringify(board)); render(); return;
+    }
+    // Optimistic update on screen
+    const preview = structuredClone(board); fn(preview); board = preview; render();
+    if (saving) await waitForSave();
+    saving = true; setStatus("busy", "Saving…");
+    try {
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const fresh = await api.read();
+        fn(fresh.board); fresh.board.updated = new Date().toISOString();
+        try {
+          sha = await api.write(fresh.board, fresh.sha, `Board: ${label}`);
+          board = fresh.board; render();
+          setStatus("ok", "Saved"); return;
+        } catch (e) { if (!e.conflict) throw e; }
+      }
+      throw new Error("Someone else was saving at the same time. Press Refresh and try again.");
+    } catch (e) {
+      setStatus("err", "Save failed"); toast(e.message);
+    } finally { saving = false; }
+  }
+  function waitForSave() { return new Promise(r => { const t = setInterval(() => { if (!saving) { clearInterval(t); r(); } }, 120); }); }
+
+  function findCard(b, id) { return b.cards.find(c => c.id === id); }
+  function stamp(c, what) { c.updated = new Date().toISOString(); c.history.push({ at: c.updated, by: "me", what }); }
+  function uid() { return "c_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+  // ---------- Rendering ----------
+  const boardEl = document.getElementById("board");
+  function render() {
+    boardEl.innerHTML = "";
+    for (const col of COLUMNS) {
+      const cards = board.cards.filter(c => c.column === col.id)
+        .sort((a, b) => (b.updated || b.created || "").localeCompare(a.updated || a.created || ""));
+      const colEl = el("section", { class: "col", "data-col": col.id, style: `--c:${col.color}` });
+      const head = el("div", { class: "col-head" },
+        el("h2", {}, col.name), el("span", { class: "count" }, String(cards.length)), el("span", { class: "hint" }, col.hint));
+      const body = el("div", { class: "col-body" });
+      if (!cards.length) body.append(el("div", { class: "empty" }, "Nothing here yet"));
+      cards.forEach(c => body.append(cardEl(c, col)));
+      colEl.append(head, body);
+      wireDrop(colEl);
+      boardEl.append(colEl);
+    }
+  }
+
+  function isStale(c) {
+    return c.column === "research" && c.expires && new Date(c.expires) < new Date();
+  }
+
+  function cardEl(c, col) {
+    const tags = el("div", { class: "row" });
+    tags.append(el("span", { class: "tag" }, c.kind === "draft" ? `Draft · ${c.options.length} options` : "Idea"));
+    if (c.format) tags.append(el("span", { class: "tag" }, FORMAT_LABEL[c.format] || c.format));
+    if (c.added_by === "me") tags.append(el("span", { class: "tag me" }, "Added by me"));
+    if (isStale(c)) tags.append(el("span", { class: "tag stale" }, "Expired"));
+    const node = el("article", { class: "card", draggable: "true", "data-id": c.id, style: `--c:${col.color}`, tabindex: "0" },
+      tags,
+      el("p", { class: "title" }, c.title || "(untitled)"),
+      c.angle ? el("div", { class: "angle" }, c.angle) : "",
+      el("div", { class: "foot" },
+        el("span", {}, c.sources[0] ? domain(c.sources[0].url) : (c.added_by || "")),
+        el("span", {}, shortDate(c.updated || c.created))));
+    node.addEventListener("click", () => openCard(c.id));
+    node.addEventListener("keydown", e => { if (e.key === "Enter") openCard(c.id); });
+    node.addEventListener("dragstart", e => { e.dataTransfer.setData("text/plain", c.id); e.dataTransfer.effectAllowed = "move"; node.classList.add("dragging"); });
+    node.addEventListener("dragend", () => node.classList.remove("dragging"));
+    return node;
+  }
+
+  function wireDrop(colEl) {
+    colEl.addEventListener("dragover", e => { e.preventDefault(); colEl.classList.add("drop"); });
+    colEl.addEventListener("dragleave", e => { if (!colEl.contains(e.relatedTarget)) colEl.classList.remove("drop"); });
+    colEl.addEventListener("drop", e => {
+      e.preventDefault(); colEl.classList.remove("drop");
+      const id = e.dataTransfer.getData("text/plain"); const to = colEl.dataset.col;
+      moveCard(id, to);
+    });
+  }
+
+  function moveCard(id, to, extra) {
+    const c = findCard(board, id); if (!c || c.column === to) return;
+    if (to === "parked" && !extra) { openCard(id, { askPark: true }); return; }
+    mutate(`move "${(c.title || id).slice(0, 50)}" to ${COL[to].name}`, b => {
+      const x = findCard(b, id); if (!x) return;
+      x.column = to;
+      if (to === "posted" && !x.posted_on) x.posted_on = new Date().toISOString().slice(0, 10);
+      if (extra && extra.park_reason !== undefined) x.park_reason = extra.park_reason;
+      stamp(x, `moved to ${COL[to].name}`);
+    });
+  }
+
+  // ---------- Card detail ----------
+  const overlay = document.getElementById("overlay");
+  const modal = document.getElementById("modal");
+  overlay.addEventListener("click", e => { if (e.target === overlay) closeModal(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+  function closeModal() { overlay.classList.remove("open"); modal.innerHTML = ""; }
+  function openModal(...children) { modal.innerHTML = ""; modal.append(...children); overlay.classList.add("open"); }
+
+  function openCard(id, opts = {}) {
+    const c = findCard(board, id); if (!c) return;
+    const meta = el("div", { class: "meta" },
+      el("span", { class: "tag" }, COL[c.column].name),
+      el("span", { class: "tag" }, c.kind === "draft" ? "Draft" : "Idea"),
+      c.format ? el("span", { class: "tag" }, FORMAT_LABEL[c.format] || c.format) : "",
+      c.rhythm ? el("span", { class: "tag" }, c.rhythm) : "",
+      el("span", {}, `Added by ${c.added_by || "?"} · ${shortDate(c.created)}`),
+      c.posted_on ? el("span", {}, `· Posted ${c.posted_on}`) : "");
+
+    const parts = [el("h3", {}, c.title || "(untitled)"), meta];
+
+    if (c.angle) parts.push(section("Angle", el("p", {}, c.angle)));
+    if (c.why_now) parts.push(section("Why now", el("p", {}, c.why_now)));
+    if (c.sources.length) {
+      const list = el("div", {});
+      c.sources.forEach(s => list.append(el("p", {}, el("a", { href: s.url, target: "_blank", rel: "noopener noreferrer" }, s.title || s.url))));
+      parts.push(section("Sources", list));
+    }
+    if (c.options.length) {
+      const wrap = el("div", {});
+      c.options.forEach((o, i) => {
+        const picked = c.picked === i;
+        const copyBtn = el("button", { class: "small" }, "Copy");
+        copyBtn.addEventListener("click", () => copy(o.text, copyBtn));
+        const pickBtn = el("button", { class: "small" + (picked ? " primary" : "") }, picked ? "Picked" : "Pick this");
+        pickBtn.addEventListener("click", () => { mutate(`pick option ${i + 1}`, b => { const x = findCard(b, id); x.picked = i; stamp(x, `picked option ${i + 1}`); }).then(() => openCard(id)); });
+        wrap.append(el("div", { class: "option" + (picked ? " picked" : "") },
+          el("div", { class: "ohead" }, el("strong", {}, `Option ${i + 1}${o.label ? " · " + o.label : ""}`), el("span", { class: "spacer" }), pickBtn, copyBtn),
+          withAddHighlights(o.text || "")));
+      });
+      parts.push(section("Options", wrap));
+      parts.push(el("div", { class: "note" }, "Yellow [ADD: …] spots need your real detail before posting."));
+    }
+    if (c.writer_notes) parts.push(section("Writer notes", el("p", {}, c.writer_notes)));
+
+    const notes = el("textarea", { placeholder: "Feedback for the writer, or your own notes" });
+    notes.value = c.notes || "";
+    parts.push(section("Your notes", notes));
+
+    const parkBox = el("textarea", { placeholder: "Why is this parked? e.g. too salesy, weak hook, not my take" });
+    parkBox.value = c.park_reason || "";
+    const parkSec = section("Park reason (the writer learns from this)", parkBox);
+    if (!(opts.askPark || c.column === "parked")) parkSec.style.display = "none";
+    parts.push(parkSec);
+
+    const moveSel = el("select", {});
+    COLUMNS.forEach(col => { const o = el("option", { value: col.id }, col.name); if (col.id === c.column) o.selected = true; moveSel.append(o); });
+    if (opts.askPark) moveSel.value = "parked";
+    moveSel.addEventListener("change", () => { parkSec.style.display = moveSel.value === "parked" ? "" : "none"; });
+
+    const save = el("button", { class: "primary" }, "Save");
+    save.addEventListener("click", () => {
+      const to = moveSel.value;
+      if (to === "parked" && !parkBox.value.trim()) { parkBox.focus(); toast("Add a short reason so the writer can learn from it."); return; }
+      const label = to !== c.column ? `move "${(c.title || id).slice(0, 50)}" to ${COL[to].name}` : `update "${(c.title || id).slice(0, 50)}"`;
+      mutate(label, b => {
+        const x = findCard(b, id); if (!x) return;
+        x.notes = notes.value;
+        if (to === "parked" || x.column === "parked") x.park_reason = parkBox.value;
+        if (to !== x.column) { x.column = to; if (to === "posted" && !x.posted_on) x.posted_on = new Date().toISOString().slice(0, 10); stamp(x, `moved to ${COL[to].name}`); }
+        else stamp(x, "edited notes");
+      });
+      closeModal();
+    });
+    const del = el("button", { class: "danger" }, "Delete");
+    let armed = false;
+    del.addEventListener("click", () => {
+      if (!armed) { armed = true; del.textContent = "Click again to delete"; return; }
+      mutate(`delete "${(c.title || id).slice(0, 50)}"`, b => { b.cards = b.cards.filter(x => x.id !== id); });
+      closeModal();
+    });
+    const cancel = el("button", {}, "Close"); cancel.addEventListener("click", closeModal);
+
+    parts.push(el("div", { class: "actions" }, el("span", { class: "lbl", style: "margin:0" }, "Move to"), el("div", { style: "width:150px" }, moveSel), el("span", { class: "spacer" }), del, cancel, save));
+    openModal(...parts);
+    if (opts.askPark) parkBox.focus();
+  }
+
+  function section(title, body) { return el("section", {}, el("label", {}, title), body); }
+
+  function withAddHighlights(text) {
+    const div = el("div", { class: "text" });
+    const re = /\[ADD:[^\]]*\]/g; let last = 0, m;
+    while ((m = re.exec(text))) {
+      if (m.index > last) div.append(document.createTextNode(text.slice(last, m.index)));
+      div.append(el("span", { class: "add" }, m[0]));
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) div.append(document.createTextNode(text.slice(last)));
+    return div;
+  }
+
+  async function copy(text, btn) {
+    try { await navigator.clipboard.writeText(text); }
+    catch {
+      const t = el("textarea", {}); t.value = text; document.body.append(t); t.select();
+      try { document.execCommand("copy"); } catch {} t.remove();
+    }
+    btn.textContent = "Copied"; setTimeout(() => (btn.textContent = "Copy"), 1400);
+  }
+
+  // ---------- Add idea ----------
+  document.getElementById("btnAdd").addEventListener("click", () => {
+    const title = el("input", { type: "text", placeholder: "Short title, e.g. Clay's new AI agent for list building" });
+    const link = el("input", { type: "url", placeholder: "Link (a LinkedIn post, article, anything)" });
+    const angle = el("textarea", { placeholder: "Your take or why it caught your eye (optional, but it helps the writer)" });
+    const fmt = el("select", {}, el("option", { value: "" }, "Any format"));
+    Object.entries(FORMAT_LABEL).forEach(([k, v]) => fmt.append(el("option", { value: k }, v)));
+    const add = el("button", { class: "primary" }, "Add to Research");
+    add.addEventListener("click", () => {
+      if (!title.value.trim() && !link.value.trim()) { title.focus(); toast("Add a title or a link."); return; }
+      const now = new Date().toISOString();
+      const card = {
+        id: uid(), column: "research", kind: "idea", added_by: "me",
+        title: title.value.trim() || link.value.trim(), angle: angle.value.trim(), format: fmt.value || "",
+        sources: link.value.trim() ? [{ title: link.value.trim(), url: link.value.trim() }] : [],
+        options: [], picked: null, notes: "", created: now, updated: now,
+        history: [{ at: now, by: "me", what: "added idea" }],
+      };
+      mutate(`add idea "${card.title.slice(0, 50)}"`, b => { b.cards.push(card); });
+      closeModal();
+    });
+    const cancel = el("button", {}, "Cancel"); cancel.addEventListener("click", closeModal);
+    openModal(el("h3", {}, "Add an idea"),
+      el("div", { class: "meta" }, "Saw something good while scrolling? Drop it here. The writer reads these too."),
+      section("Title", title), section("Link", link), section("Your take", angle), section("Format", fmt),
+      el("div", { class: "actions" }, el("span", { class: "spacer" }), cancel, add));
+    title.focus();
+  });
+
+  // ---------- Settings ----------
+  document.getElementById("btnSettings").addEventListener("click", openSettings);
+  function openSettings() {
+    const owner = el("input", { type: "text", placeholder: "your GitHub username" }); owner.value = settings.owner || "";
+    const repo = el("input", { type: "text", placeholder: "linkedin-content-board" }); repo.value = settings.repo || "";
+    const branch = el("input", { type: "text" }); branch.value = settings.branch || "main";
+    const token = el("input", { type: "password", placeholder: "github_pat_…" }); token.value = settings.token || "";
+    const save = el("button", { class: "primary" }, "Save and connect");
+    save.addEventListener("click", () => {
+      settings = { ...settings, owner: owner.value.trim(), repo: repo.value.trim(), branch: branch.value.trim() || "main", token: token.value.trim() };
+      if (!safeSet(SETTINGS_KEY, JSON.stringify(settings))) toast("This browser blocked saving settings. You'll need to enter them again next time.");
+      closeModal(); load();
+    });
+    const forget = el("button", { class: "danger" }, "Forget token on this device");
+    forget.addEventListener("click", () => { settings.token = ""; safeSet(SETTINGS_KEY, JSON.stringify(settings)); closeModal(); load(); });
+    const cancel = el("button", {}, "Cancel"); cancel.addEventListener("click", closeModal);
+    openModal(el("h3", {}, "Settings"),
+      el("div", { class: "meta" }, "Connect the board to your GitHub repo so your moves save and the agents see them."),
+      el("div", { class: "grid2" }, section("GitHub username", owner), section("Repo name", repo)),
+      section("Branch", branch),
+      section("GitHub token", token),
+      el("div", { class: "note" }, "Use a fine-grained token with access to this one repo only, and \"Contents: Read and write\" permission. It's stored only in this browser on this device, never in the repo."),
+      el("div", { class: "actions" }, forget, el("span", { class: "spacer" }), cancel, save));
+  }
+
+  document.getElementById("btnRefresh").addEventListener("click", load);
+
+  // ---------- Helpers ----------
+  function el(tag, attrs = {}, ...kids) {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v === undefined || v === null || v === false) continue;
+      n.setAttribute(k, v === true ? "" : v);
+    }
+    for (const k of kids) { if (k === "" || k == null) continue; n.append(k instanceof Node ? k : document.createTextNode(String(k))); }
+    return n;
+  }
+  function domain(u) { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } }
+  function shortDate(iso) {
+    if (!iso) return ""; const d = new Date(iso); if (isNaN(d)) return "";
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+  function setStatus(kind, text) {
+    document.getElementById("statusDot").className = "dot " + (kind || "");
+    document.getElementById("statusText").textContent = text;
+  }
+  let toastTimer;
+  function toast(msg) {
+    const t = document.getElementById("toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 3800);
+  }
+  function renderBanner() {
+    const b = document.getElementById("banner"); const m = mode();
+    if (m === "github") { b.hidden = true; return; }
+    b.hidden = false; b.innerHTML = "";
+    const btn = el("button", { class: "small", style: "margin-left:8px" }, "Open settings"); btn.addEventListener("click", openSettings);
+    b.append(m === "readonly"
+      ? "You're viewing the board read only. Connect your GitHub token to move cards and add ideas."
+      : "Demo mode: changes stay in this browser only. Connect GitHub to sync with the agents.", btn);
+  }
+
+  function sampleBoard() {
+    const now = Date.now(); const d = n => new Date(now - n * 864e5).toISOString();
+    return { version: 1, updated: d(0), cards: [
+      { id: "s1", column: "research", kind: "idea", added_by: "researcher", format: "teardown", title: "Sample: how a SaaS brand runs LinkedIn Thought Leader Ads",
+        angle: "Break down why boosting employee posts beats company-page ads for mid-funnel, with what I'd copy for a B2B team.",
+        why_now: "Sample card. Real ideas arrive every Monday.", sources: [{ title: "Example source", url: "https://example.com" }],
+        options: [], created: d(1), updated: d(1), expires: new Date(now + 13 * 864e5).toISOString(), history: [] },
+      { id: "s2", column: "review", kind: "draft", added_by: "writer", format: "story", rhythm: "Week 2 · Story", title: "Sample: the campaign I almost killed",
+        angle: "A story about a slow-starting campaign and what the data said in week 3.", sources: [], picked: null,
+        options: [
+          { label: "Story", text: "I almost paused our best campaign of the year.\n\nWeek 1 looked flat. [ADD: the real numbers from week 1]\n\nWeek 3 told a different story...\n\nwdyt, how long do you give a campaign before you call it?" },
+          { label: "Hot take", text: "Most B2B campaigns get killed too early.\n\n[ADD: one example from your own work]\n\nGive it 3 weeks before you judge it." },
+        ], created: d(0), updated: d(0), history: [] },
+    ] };
+  }
+
+  load();
+})();
+</script>
+</body>
+</html>
