@@ -150,7 +150,7 @@
 <header>
   <div>
     <h1>Content Board</h1>
-    <div class="sub">LinkedIn posts · research Mon · drafts Tue</div>
+    <div class="sub">Sherlock researches Mon · Watson drafts Tue</div>
   </div>
   <div class="spacer"></div>
   <div class="status" id="status"><span class="dot" id="statusDot"></span><span id="statusText">Loading…</span></div>
@@ -170,13 +170,15 @@
 
   // ---------- Columns ----------
   const COLUMNS = [
-    { id: "research", name: "Research", color: "var(--research)", hint: "Ideas from the researcher and you" },
-    { id: "writing",  name: "Writing",  color: "var(--writing)",  hint: "Being drafted" },
+    { id: "research", name: "Research", color: "var(--research)", hint: "Ideas from Sherlock and you" },
+    { id: "writing",  name: "Writing",  color: "var(--writing)",  hint: "Watson is drafting" },
     { id: "review",   name: "In review", color: "var(--review)",  hint: "Your turn: pick, add detail, post" },
     { id: "posted",   name: "Posted",   color: "var(--posted)",   hint: "Live on LinkedIn" },
     { id: "parked",   name: "Parked",   color: "var(--parked)",   hint: "Not now, with a reason" },
   ];
   const COL = Object.fromEntries(COLUMNS.map(c => [c.id, c]));
+  const WHO = { researcher: "Sherlock", writer: "Watson", me: "me", setup: "setup" };
+  function who(x) { return WHO[x] || x || "?"; }
   const FORMAT_LABEL = { "how-to": "How-to", "template": "Template", "pov": "POV", "hot-take": "Hot take", "story": "Story", "teardown": "Teardown", "news": "News", "experiment": "Experiment" };
 
   // ---------- Settings & storage ----------
@@ -357,7 +359,7 @@
       el("p", { class: "title" }, c.title || "(untitled)"),
       c.angle ? el("div", { class: "angle" }, c.angle) : "",
       el("div", { class: "foot" },
-        el("span", {}, c.sources[0] ? domain(c.sources[0].url) : (c.added_by || "")),
+        el("span", {}, c.sources[0] ? domain(c.sources[0].url) : who(c.added_by)),
         el("span", {}, shortDate(c.updated || c.created))));
     node.addEventListener("click", () => openCard(c.id));
     node.addEventListener("keydown", e => { if (e.key === "Enter") openCard(c.id); });
@@ -403,7 +405,7 @@
       el("span", { class: "tag" }, c.kind === "draft" ? "Draft" : "Idea"),
       c.format ? el("span", { class: "tag" }, FORMAT_LABEL[c.format] || c.format) : "",
       c.rhythm ? el("span", { class: "tag" }, c.rhythm) : "",
-      el("span", {}, `Added by ${c.added_by || "?"} · ${shortDate(c.created)}`),
+      el("span", {}, `Added by ${who(c.added_by)} · ${shortDate(c.created)}`),
       c.posted_on ? el("span", {}, `· Posted ${c.posted_on}`) : "");
 
     const parts = [el("h3", {}, c.title || "(untitled)"), meta];
