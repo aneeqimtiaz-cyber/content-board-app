@@ -361,6 +361,7 @@
     tags.append(el("span", { class: "tag" }, c.kind === "draft" ? `Draft · ${c.options.length} options` : "Idea"));
     if (c.format) tags.append(el("span", { class: "tag" }, FORMAT_LABEL[c.format] || c.format));
     if (typeof c.score === "number") tags.append(el("span", { class: "tag score" }, `Score ${c.score}/10`));
+    if (c.rewrite_request && !c.rewrite_request.done) tags.append(el("span", { class: "tag busy" }, "Rewrite requested"));
     if (c.final_draft && c.final_draft.trim()) tags.append(el("span", { class: "tag final" }, "Final draft ✓"));
     if (c.added_by === "me") tags.append(el("span", { class: "tag me" }, "Added by me"));
     if (c.claimed_by && c.claimed_at && (Date.now() - new Date(c.claimed_at)) < 2 * 3600e3) tags.append(el("span", { class: "tag busy" }, `${who(c.claimed_by)} is working on it`));
@@ -390,16 +391,25 @@
     });
   }
 
+  // Shared rules for moving a card into a column.
+  function applyMove(x, to) {
+    const wasApproved = x.column === "approved" || x.column === "posted";
+    x.column = to;
+    if (to === "posted" && !x.posted_on) x.posted_on = new Date().toISOString().slice(0, 10);
+    if ((to === "approved" || to === "posted") && !x.approved_on) x.approved_on = new Date().toISOString();
+    if (wasApproved && to !== "approved" && to !== "posted") delete x.approved_on;
+    stamp(x, `moved to ${COL[to].name}`);
+  }
+  function needsRewriteNote(c, to) { return to === "writing" && c.column !== "writing" && c.options && c.options.length > 0; }
+
   function moveCard(id, to, extra) {
     const c = findCard(board, id); if (!c || c.column === to) return;
     if (to === "parked" && !extra) { openCard(id, { askPark: true }); return; }
+    if (needsRewriteNote(c, to) && !extra) { openCard(id, { askRewrite: true }); return; }
     mutate(`move "${(c.title || id).slice(0, 50)}" to ${COL[to].name}`, b => {
       const x = findCard(b, id); if (!x) return;
-      x.column = to;
-      if (to === "posted" && !x.posted_on) x.posted_on = new Date().toISOString().slice(0, 10);
-      if ((to === "approved" || to === "posted") && !x.approved_on) x.approved_on = new Date().toISOString();
+      applyMove(x, to);
       if (extra && extra.park_reason !== undefined) x.park_reason = extra.park_reason;
-      stamp(x, `moved to ${COL[to].name}`);
     });
   }
 
@@ -441,6 +451,11 @@
       parts.push(section("Options", wrap));
       parts.push(el("div", { class: "note" }, "Yellow [ADD: …] spots need your real detail before posting."));
     }
+    if (Array.isArray(c.previous_options) && c.previous_options.length) {
+      const det = el("details", {}, el("summary", { style: "cursor:pointer;color:var(--muted);font-size:12px" }, "Show previous version (before the last rewrite)"));
+      c.previous_options.forEach((o, i) => det.append(el("div", { class: "option", style: "opacity:.75;margin-top:8px" }, el("div", { class: "ohead" }, el("strong", {}, `Old option ${i + 1}${o.label ? " · " + o.label : ""}`)), withAddHighlights(o.text || ""))));
+      parts.push(det);
+    }
     let finalBox = null;
     if (c.options.length || c.final_draft) {
       finalBox = el("textarea", { class: "final", placeholder: "Pull the parts you like from the options above and write your final version here. This is what you post, and the Manager learns from what you kept and changed." });
@@ -464,22 +479,34 @@
     if (!(opts.askPark || c.column === "parked")) parkSec.style.display = "none";
     parts.push(parkSec);
 
+    const rewriteBox = el("textarea", { placeholder: "What should Watson change? e.g. weaker hook than option 2, don't name the CPO, make it shorter" });
+    const rewriteSec = section("What should Watson change? (he rewrites this card)", rewriteBox);
+    rewriteSec.style.display = opts.askRewrite ? "" : "none";
+    parts.push(rewriteSec);
+    if (c.rewrite_request && !c.rewrite_request.done) parts.push(section("Rewrite requested", el("p", {}, `${c.rewrite_request.note} · ${shortDate(c.rewrite_request.at)}`)));
+
     const moveSel = el("select", {});
     COLUMNS.forEach(col => { const o = el("option", { value: col.id }, col.name); if (col.id === c.column) o.selected = true; moveSel.append(o); });
     if (opts.askPark) moveSel.value = "parked";
-    moveSel.addEventListener("change", () => { parkSec.style.display = moveSel.value === "parked" ? "" : "none"; });
+    if (opts.askRewrite) moveSel.value = "writing";
+    moveSel.addEventListener("change", () => {
+      parkSec.style.display = moveSel.value === "parked" ? "" : "none";
+      rewriteSec.style.display = needsRewriteNote(c, moveSel.value) ? "" : "none";
+    });
 
     const save = el("button", { class: "primary" }, "Save");
     save.addEventListener("click", () => {
       const to = moveSel.value;
       if (to === "parked" && !parkBox.value.trim()) { parkBox.focus(); toast("Add a short reason so the writer can learn from it."); return; }
+      if (needsRewriteNote(c, to) && !rewriteBox.value.trim()) { rewriteBox.focus(); toast("Tell Watson what to change, so he can rewrite it."); return; }
       const label = to !== c.column ? `move "${(c.title || id).slice(0, 50)}" to ${COL[to].name}` : `update "${(c.title || id).slice(0, 50)}"`;
       mutate(label, b => {
         const x = findCard(b, id); if (!x) return;
         x.notes = notes.value;
         if (finalBox && finalBox.value !== (x.final_draft || "")) { x.final_draft = finalBox.value; x.final_draft_at = new Date().toISOString(); stamp(x, "edited final draft"); }
         if (to === "parked" || x.column === "parked") x.park_reason = parkBox.value;
-        if (to !== x.column) { x.column = to; if (to === "posted" && !x.posted_on) x.posted_on = new Date().toISOString().slice(0, 10); if ((to === "approved" || to === "posted") && !x.approved_on) x.approved_on = new Date().toISOString(); stamp(x, `moved to ${COL[to].name}`); }
+        if (needsRewriteNote(x, to) && rewriteBox.value.trim()) { x.rewrite_request = { note: rewriteBox.value.trim(), at: new Date().toISOString(), done: false }; }
+        if (to !== x.column) applyMove(x, to);
         else stamp(x, "edited notes");
       });
       closeModal();
@@ -496,6 +523,7 @@
     parts.push(el("div", { class: "actions" }, el("span", { class: "lbl", style: "margin:0" }, "Move to"), el("div", { style: "width:150px" }, moveSel), el("span", { class: "spacer" }), del, cancel, save));
     openModal(...parts);
     if (opts.askPark) parkBox.focus();
+    if (opts.askRewrite) rewriteBox.focus();
   }
 
   function section(title, body) { return el("section", {}, el("label", {}, title), body); }
