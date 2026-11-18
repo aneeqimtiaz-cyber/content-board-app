@@ -156,7 +156,7 @@
 <header>
   <div>
     <h1>Content Board</h1>
-    <div class="sub">Sherlock researches Mon · Watson writes when needed · Manager checks every 12h</div>
+    <div class="sub">Sherlock researches Mon · Watson writes when needed · Hudson checks every 12h</div>
   </div>
   <div class="spacer"></div>
   <div class="status" id="status"><span class="dot" id="statusDot"></span><span id="statusText">Loading…</span></div>
@@ -185,7 +185,7 @@
     { id: "parked",   name: "Parked",   color: "var(--parked)",   hint: "Not now, with a reason" },
   ];
   const COL = Object.fromEntries(COLUMNS.map(c => [c.id, c]));
-  const WHO = { researcher: "Sherlock", writer: "Watson", manager: "Manager", me: "me", setup: "setup" };
+  const WHO = { researcher: "Sherlock", writer: "Watson", manager: "Hudson", me: "me", setup: "setup" };
   function who(x) { return WHO[x] || x || "?"; }
   const FORMAT_LABEL = { "how-to": "How-to", "template": "Template", "pov": "POV", "hot-take": "Hot take", "story": "Story", "teardown": "Teardown", "news": "News", "experiment": "Experiment" };
 
@@ -469,7 +469,7 @@
     }
     let finalBox = null;
     if (c.options.length || c.final_draft) {
-      finalBox = el("textarea", { class: "final", placeholder: "Pull the parts you like from the options above and write your final version here. This is what you post, and the Manager learns from what you kept and changed." });
+      finalBox = el("textarea", { class: "final", placeholder: "Pull the parts you like from the options above and write your final version here. This is what you post, and Hudson learns from what you kept and changed." });
       finalBox.value = c.final_draft || "";
       const copyFinal = el("button", { class: "small" }, "Copy final draft");
       copyFinal.addEventListener("click", () => copy(finalBox.value, copyFinal));
