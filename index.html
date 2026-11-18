@@ -18,6 +18,8 @@
     --review: #5aa06b;
     --posted: #5b8def;
     --parked: #9aa1ad;
+    --waiting: #b58ad8;
+    --approved: #2e9e8f;
     --accent: #1d2433;
     --add: #fff1c2;
     --radius: 12px;
@@ -64,7 +66,7 @@
   }
   .banner[hidden] { display: none; }
   main {
-    flex: 1; display: grid; grid-template-columns: repeat(5, minmax(240px, 1fr));
+    flex: 1; display: grid; grid-template-columns: repeat(7, minmax(230px, 1fr));
     gap: 14px; padding: 16px 20px 24px; overflow-x: auto; align-items: start;
   }
   .col {
@@ -95,6 +97,7 @@
     border: 1px solid var(--line); white-space: nowrap;
   }
   .tag.me { background: #eef3ff; border-color: #d6e0fb; }
+  .tag.busy { background: #fff3e0; border-color: #f3d3a6; color: #8a4b00; }
   .tag.score { background: #eef7f0; border-color: #cfe6d5; color: #2f6b3e; }
   .tag.stale { background: #fdecea; border-color: #f5c6c1; color: #9b2c22; }
   .card .title { font-weight: 600; font-size: 13.5px; margin: 0 0 4px; }
@@ -140,7 +143,7 @@
   }
   .toast.show { opacity: 1; }
   @media (max-width: 760px) {
-    main { grid-template-columns: repeat(5, 82vw); scroll-snap-type: x mandatory; }
+    main { grid-template-columns: repeat(7, 82vw); scroll-snap-type: x mandatory; }
     .col { scroll-snap-align: start; }
     .grid2 { grid-template-columns: 1fr; }
     header { padding: 12px 14px; }
@@ -151,7 +154,7 @@
 <header>
   <div>
     <h1>Content Board</h1>
-    <div class="sub">Sherlock researches Mon · Watson drafts Tue</div>
+    <div class="sub">Sherlock researches Mon · Watson writes when needed · Manager checks every 12h</div>
   </div>
   <div class="spacer"></div>
   <div class="status" id="status"><span class="dot" id="statusDot"></span><span id="statusText">Loading…</span></div>
@@ -173,12 +176,14 @@
   const COLUMNS = [
     { id: "research", name: "Research", color: "var(--research)", hint: "Ideas from Sherlock and you" },
     { id: "writing",  name: "Writing",  color: "var(--writing)",  hint: "Drag an idea here to make Watson write it first" },
-    { id: "review",   name: "In review", color: "var(--review)",  hint: "Your turn: pick, add detail, post" },
+    { id: "review",   name: "In review", color: "var(--review)",  hint: "Your turn: pick an option, add detail" },
+    { id: "waiting",  name: "Waiting on me", color: "var(--waiting)", hint: "Good, but needs something from you" },
+    { id: "approved", name: "Approved", color: "var(--approved)", hint: "Ready to post this week" },
     { id: "posted",   name: "Posted",   color: "var(--posted)",   hint: "Live on LinkedIn" },
     { id: "parked",   name: "Parked",   color: "var(--parked)",   hint: "Not now, with a reason" },
   ];
   const COL = Object.fromEntries(COLUMNS.map(c => [c.id, c]));
-  const WHO = { researcher: "Sherlock", writer: "Watson", me: "me", setup: "setup" };
+  const WHO = { researcher: "Sherlock", writer: "Watson", manager: "Manager", me: "me", setup: "setup" };
   function who(x) { return WHO[x] || x || "?"; }
   const FORMAT_LABEL = { "how-to": "How-to", "template": "Template", "pov": "POV", "hot-take": "Hot take", "story": "Story", "teardown": "Teardown", "news": "News", "experiment": "Experiment" };
 
@@ -355,6 +360,8 @@
     if (c.format) tags.append(el("span", { class: "tag" }, FORMAT_LABEL[c.format] || c.format));
     if (typeof c.score === "number") tags.append(el("span", { class: "tag score" }, `Score ${c.score}/10`));
     if (c.added_by === "me") tags.append(el("span", { class: "tag me" }, "Added by me"));
+    if (c.claimed_by && c.claimed_at && (Date.now() - new Date(c.claimed_at)) < 2 * 3600e3) tags.append(el("span", { class: "tag busy" }, `${who(c.claimed_by)} is working on it`));
+    if (c.needs_you) tags.append(el("span", { class: "tag stale" }, "Needs you"));
     if (isStale(c)) tags.append(el("span", { class: "tag stale" }, "Expired"));
     const node = el("article", { class: "card", draggable: "true", "data-id": c.id, style: `--c:${col.color}`, tabindex: "0" },
       tags,
@@ -387,6 +394,7 @@
       const x = findCard(b, id); if (!x) return;
       x.column = to;
       if (to === "posted" && !x.posted_on) x.posted_on = new Date().toISOString().slice(0, 10);
+      if ((to === "approved" || to === "posted") && !x.approved_on) x.approved_on = new Date().toISOString();
       if (extra && extra.park_reason !== undefined) x.park_reason = extra.park_reason;
       stamp(x, `moved to ${COL[to].name}`);
     });
@@ -435,6 +443,7 @@
       parts.push(section("Options", wrap));
       parts.push(el("div", { class: "note" }, "Yellow [ADD: …] spots need your real detail before posting."));
     }
+    if (c.needs_you) parts.push(section("Needs you", el("p", {}, typeof c.needs_you === "string" ? c.needs_you : "The agents tried twice and couldn't finish this one.")));
     if (c.writer_notes) parts.push(section("Writer notes", el("p", {}, c.writer_notes)));
 
     const notes = el("textarea", { placeholder: "Feedback for the writer, or your own notes" });
@@ -461,7 +470,7 @@
         const x = findCard(b, id); if (!x) return;
         x.notes = notes.value;
         if (to === "parked" || x.column === "parked") x.park_reason = parkBox.value;
-        if (to !== x.column) { x.column = to; if (to === "posted" && !x.posted_on) x.posted_on = new Date().toISOString().slice(0, 10); stamp(x, `moved to ${COL[to].name}`); }
+        if (to !== x.column) { x.column = to; if (to === "posted" && !x.posted_on) x.posted_on = new Date().toISOString().slice(0, 10); if ((to === "approved" || to === "posted") && !x.approved_on) x.approved_on = new Date().toISOString(); stamp(x, `moved to ${COL[to].name}`); }
         else stamp(x, "edited notes");
       });
       closeModal();
