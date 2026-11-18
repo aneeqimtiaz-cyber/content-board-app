@@ -97,6 +97,8 @@
     border: 1px solid var(--line); white-space: nowrap;
   }
   .tag.me { background: #eef3ff; border-color: #d6e0fb; }
+  .tag.final { background: #eef7f0; border-color: #cfe6d5; color: #2f6b3e; font-weight: 600; }
+  textarea.final { min-height: 280px; font-size: 13.5px; line-height: 1.5; background: #fffef8; }
   .tag.busy { background: #fff3e0; border-color: #f3d3a6; color: #8a4b00; }
   .tag.score { background: #eef7f0; border-color: #cfe6d5; color: #2f6b3e; }
   .tag.stale { background: #fdecea; border-color: #f5c6c1; color: #9b2c22; }
@@ -359,6 +361,7 @@
     tags.append(el("span", { class: "tag" }, c.kind === "draft" ? `Draft · ${c.options.length} options` : "Idea"));
     if (c.format) tags.append(el("span", { class: "tag" }, FORMAT_LABEL[c.format] || c.format));
     if (typeof c.score === "number") tags.append(el("span", { class: "tag score" }, `Score ${c.score}/10`));
+    if (c.final_draft && c.final_draft.trim()) tags.append(el("span", { class: "tag final" }, "Final draft ✓"));
     if (c.added_by === "me") tags.append(el("span", { class: "tag me" }, "Added by me"));
     if (c.claimed_by && c.claimed_at && (Date.now() - new Date(c.claimed_at)) < 2 * 3600e3) tags.append(el("span", { class: "tag busy" }, `${who(c.claimed_by)} is working on it`));
     if (c.needs_you) tags.append(el("span", { class: "tag stale" }, "Needs you"));
@@ -431,17 +434,22 @@
     if (c.options.length) {
       const wrap = el("div", {});
       c.options.forEach((o, i) => {
-        const picked = c.picked === i;
-        const copyBtn = el("button", { class: "small" }, "Copy");
-        copyBtn.addEventListener("click", () => copy(o.text, copyBtn));
-        const pickBtn = el("button", { class: "small" + (picked ? " primary" : "") }, picked ? "Picked" : "Pick this");
-        pickBtn.addEventListener("click", () => { mutate(`pick option ${i + 1}`, b => { const x = findCard(b, id); x.picked = i; stamp(x, `picked option ${i + 1}`); }).then(() => openCard(id)); });
-        wrap.append(el("div", { class: "option" + (picked ? " picked" : "") },
-          el("div", { class: "ohead" }, el("strong", {}, `Option ${i + 1}${o.label ? " · " + o.label : ""}`), el("span", { class: "spacer" }), pickBtn, copyBtn),
+        wrap.append(el("div", { class: "option" },
+          el("div", { class: "ohead" }, el("strong", {}, `Option ${i + 1}${o.label ? " · " + o.label : ""}`)),
           withAddHighlights(o.text || "")));
       });
       parts.push(section("Options", wrap));
       parts.push(el("div", { class: "note" }, "Yellow [ADD: …] spots need your real detail before posting."));
+    }
+    let finalBox = null;
+    if (c.options.length || c.final_draft) {
+      finalBox = el("textarea", { class: "final", placeholder: "Pull the parts you like from the options above and write your final version here. This is what you post, and the Manager learns from what you kept and changed." });
+      finalBox.value = c.final_draft || "";
+      const copyFinal = el("button", { class: "small" }, "Copy final draft");
+      copyFinal.addEventListener("click", () => copy(finalBox.value, copyFinal));
+      const fsec = section("Final draft", finalBox);
+      fsec.append(el("div", { class: "actions", style: "margin-top:8px" }, el("span", { class: "note", style: "margin:0" }, c.final_draft_at ? `Last saved ${shortDate(c.final_draft_at)}` : "Not saved yet"), el("span", { class: "spacer" }), copyFinal));
+      parts.push(fsec);
     }
     if (c.needs_you) parts.push(section("Needs you", el("p", {}, typeof c.needs_you === "string" ? c.needs_you : "The agents tried twice and couldn't finish this one.")));
     if (c.writer_notes) parts.push(section("Writer notes", el("p", {}, c.writer_notes)));
@@ -469,6 +477,7 @@
       mutate(label, b => {
         const x = findCard(b, id); if (!x) return;
         x.notes = notes.value;
+        if (finalBox && finalBox.value !== (x.final_draft || "")) { x.final_draft = finalBox.value; x.final_draft_at = new Date().toISOString(); stamp(x, "edited final draft"); }
         if (to === "parked" || x.column === "parked") x.park_reason = parkBox.value;
         if (to !== x.column) { x.column = to; if (to === "posted" && !x.posted_on) x.posted_on = new Date().toISOString().slice(0, 10); if ((to === "approved" || to === "posted") && !x.approved_on) x.approved_on = new Date().toISOString(); stamp(x, `moved to ${COL[to].name}`); }
         else stamp(x, "edited notes");
