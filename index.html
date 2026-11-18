@@ -416,9 +416,20 @@
   // ---------- Card detail ----------
   const overlay = document.getElementById("overlay");
   const modal = document.getElementById("modal");
-  overlay.addEventListener("click", e => { if (e.target === overlay) closeModal(); });
-  document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
-  function closeModal() { overlay.classList.remove("open"); modal.innerHTML = ""; }
+  // If a card has unsaved typing, clicking outside or pressing Esc doesn't close it.
+  let hasUnsaved = () => false;
+  function softClose() {
+    if (hasUnsaved()) { toast("You have unsaved changes. Click Save, or Close to keep them as a draft on this device."); return; }
+    closeModal();
+  }
+  overlay.addEventListener("click", e => { if (e.target === overlay) softClose(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && overlay.classList.contains("open")) softClose(); });
+  function closeModal() { overlay.classList.remove("open"); modal.innerHTML = ""; hasUnsaved = () => false; }
+
+  // Unsaved typing is kept in this browser until you click Save.
+  const DRAFT_KEY = id => "cb_draft_" + id;
+  function loadDraft(id) { try { return JSON.parse(safeGet(DRAFT_KEY(id)) || "null"); } catch { return null; } }
+  function clearDraft(id) { try { localStorage.removeItem(DRAFT_KEY(id)); } catch {} }
   function openModal(...children) { modal.innerHTML = ""; modal.append(...children); overlay.classList.add("open"); }
 
   function openCard(id, opts = {}) {
@@ -485,6 +496,30 @@
     parts.push(rewriteSec);
     if (c.rewrite_request && !c.rewrite_request.done) parts.push(section("Rewrite requested", el("p", {}, `${c.rewrite_request.note} · ${shortDate(c.rewrite_request.at)}`)));
 
+    // Restore unsaved typing from last time, and keep saving it as you type.
+    const fields = { final: finalBox, notes, rewrite: rewriteBox };
+    const saved = { final: c.final_draft || "", notes: c.notes || "", rewrite: "" };
+    const draft = loadDraft(id);
+    if (draft) {
+      let restored = false;
+      for (const k of Object.keys(fields)) if (fields[k] && typeof draft[k] === "string" && draft[k] !== saved[k]) { fields[k].value = draft[k]; restored = true; }
+      if (draft.rewrite && draft.rewrite.trim()) { rewriteSec.style.display = ""; }
+      if (restored) parts.splice(2, 0, el("div", { class: "banner", style: "margin:0 0 8px" }, `Restored your unsaved text from ${new Date(draft.at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}. Click Save to keep it.`));
+      else clearDraft(id);
+    }
+    hasUnsaved = () => Object.keys(fields).some(k => fields[k] && fields[k].value !== saved[k]);
+    let draftTimer;
+    const keepDraft = () => {
+      clearTimeout(draftTimer);
+      draftTimer = setTimeout(() => {
+        if (!hasUnsaved()) { clearDraft(id); return; }
+        const d = { at: new Date().toISOString() };
+        for (const k of Object.keys(fields)) if (fields[k]) d[k] = fields[k].value;
+        safeSet(DRAFT_KEY(id), JSON.stringify(d));
+      }, 400);
+    };
+    for (const k of Object.keys(fields)) if (fields[k]) fields[k].addEventListener("input", keepDraft);
+
     const moveSel = el("select", {});
     COLUMNS.forEach(col => { const o = el("option", { value: col.id }, col.name); if (col.id === c.column) o.selected = true; moveSel.append(o); });
     if (opts.askPark) moveSel.value = "parked";
@@ -509,6 +544,7 @@
         if (to !== x.column) applyMove(x, to);
         else stamp(x, "edited notes");
       });
+      clearDraft(id);
       closeModal();
     });
     const del = el("button", { class: "danger" }, "Delete");
@@ -516,6 +552,7 @@
     del.addEventListener("click", () => {
       if (!armed) { armed = true; del.textContent = "Click again to delete"; return; }
       mutate(`delete "${(c.title || id).slice(0, 50)}"`, b => { b.cards = b.cards.filter(x => x.id !== id); });
+      clearDraft(id);
       closeModal();
     });
     const cancel = el("button", {}, "Close"); cancel.addEventListener("click", closeModal);
